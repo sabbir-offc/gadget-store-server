@@ -29,7 +29,17 @@ async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
+        const productCollection = client.db("brandShopDB").collection("product");
 
+        app.get('/products', async (req, res) => {
+            const query = await productCollection.find().toArray();
+            res.send(query);
+        })
+        app.post('/products', async (req, res) => {
+            const product = req.body;
+            const result = await productCollection.insertOne(product);
+            res.send(result)
+        });
 
 
 
