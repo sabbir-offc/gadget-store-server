@@ -32,7 +32,20 @@ async function run() {
         const productCollection = client.db("brandShopDB").collection("product");
         const adCollection = client.db("brandShopDB").collection("ad");
         const addedCartCollection = client.db("brandShopDB").collection("cart");
+        const userCollection = client.db("brandShopDB").collection("users");
 
+
+        //userList
+
+        app.get('/users', async (req, res) => {
+            const query = await userCollection.find().toArray();
+            res.send(query);
+        })
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const result = await userCollection.insertOne(user);
+            res.send(result);
+        })
 
 
         app.get('/products', async (req, res) => {
@@ -66,22 +79,29 @@ async function run() {
             const query = await addedCartCollection.find().toArray();
             res.send(query);
         })
+        app.get('/user-cart/:userId', async (req, res) => {
+            const userId = req.params.userId
+            const query = { userId };
+            const result = await addedCartCollection.find(query).toArray();
+            res.send(result)
+        });
+
         app.post('/user-cart', async (req, res) => {
             const cart = req.body;
             const result = await addedCartCollection.insertOne(cart);
             res.send(result);
         })
 
-        app.get('/user-cart/:email', async (req, res) => {
-            const email = req.params.email
-            const query = { userEmail: email };
-            const result = await addedCartCollection.find(query).toArray();
-            res.send(result)
+
+        //cart product delete
+
+        app.delete('/user-cart/:userId/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await addedCartCollection.deleteOne(query);
+            res.send(result);
 
         })
-
-
-
 
 
         app.get('/brands/:brandName', async (req, res) => {
