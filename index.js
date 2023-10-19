@@ -31,6 +31,9 @@ async function run() {
         await client.connect();
         const productCollection = client.db("brandShopDB").collection("product");
         const adCollection = client.db("brandShopDB").collection("ad");
+        const addedCartCollection = client.db("brandShopDB").collection("cart");
+
+
 
         app.get('/products', async (req, res) => {
             const query = await productCollection.find().toArray();
@@ -50,13 +53,37 @@ async function run() {
 
         app.get('/advertise', async (req, res) => {
             const query = await adCollection.find().toArray();
-            res.send(query)
+            res.send(query);
         })
         app.post('/advertise', async (req, res) => {
             const ad = req.body;
             const result = await adCollection.insertOne(ad);
-            res.send(result)
+            res.send(result);
         })
+
+        //user cart
+        app.get('/user-cart', async (req, res) => {
+            const query = await addedCartCollection.find().toArray();
+            res.send(query);
+        })
+        app.post('/user-cart', async (req, res) => {
+            const cart = req.body;
+            const result = await addedCartCollection.insertOne(cart);
+            res.send(result);
+        })
+
+        app.get('/user-cart/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { userEmail: email };
+            const result = await addedCartCollection.find(query).toArray();
+            res.send(result)
+
+        })
+
+
+
+
+
         app.get('/brands/:brandName', async (req, res) => {
             const brandName = req.params.brandName;
             const query = { brandName: brandName };
