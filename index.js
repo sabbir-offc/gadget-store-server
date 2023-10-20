@@ -63,6 +63,27 @@ async function run() {
             const result = await productCollection.findOne(query);
             res.send(result)
         })
+        //product update
+        app.put('/products/:id', async (req, res) => {
+            const id = req.params.id
+            const updateProduct = req.body
+            const filter = { _id: new ObjectId(id) };
+
+            const options = { upsert: true };
+            const update = {
+                $set: {
+                    image: updateProduct.image,
+                    productName: updateProduct.productName,
+                    brandName: updateProduct.brandName,
+                    productType: updateProduct.productType,
+                    price: updateProduct.price,
+                    rating: updateProduct.rating,
+                },
+            };
+            const result = await productCollection.updateOne(filter, update, options);
+            res.send(result)
+        })
+
 
         app.get('/advertise', async (req, res) => {
             const query = await adCollection.find().toArray();
