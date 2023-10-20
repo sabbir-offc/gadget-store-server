@@ -33,6 +33,7 @@ async function run() {
         const adCollection = client.db("brandShopDB").collection("ad");
         const addedCartCollection = client.db("brandShopDB").collection("cart");
         const userCollection = client.db("brandShopDB").collection("users");
+        const brandDataCollection = client.db("brandShopDB").collection("brandData");
 
 
         //userList
@@ -133,7 +134,16 @@ async function run() {
         })
 
 
-
+        app.get('/brand-data', async (req, res) => {
+            const query = await brandDataCollection.find().toArray();
+            res.send(query);
+        })
+        app.post('/brand-data', async (req, res) => {
+            const brandData = req.body;
+            console.log(brandData)
+            const result = await brandDataCollection.insertOne(brandData)
+            res.send(result);
+        })
 
 
 
