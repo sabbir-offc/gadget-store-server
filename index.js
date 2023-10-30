@@ -1,6 +1,8 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const coockieParser = require('cookie-parser');
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5001;
@@ -9,12 +11,11 @@ const port = process.env.PORT || 5001;
 
 //middleware
 app.use(express.json());
-const corsConfig = {
-    origin: '*',
+app.use(cors({
+    origin: ['http://localhost:5173'],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-}
-app.use(cors(corsConfig))
+}));
+app.use(coockieParser())
 
 
 
@@ -31,6 +32,24 @@ const client = new MongoClient(uri, {
     }
 });
 
+
+//middleware;
+const logger = async (req, res, next) => {
+    next();
+}
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access.' })
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
+        if (error) {
+            return res.status(401).send({ message: 'unauthorized access.' })
+        }
+        req.user = decoded
+        next();
+    });
+}
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -41,6 +60,23 @@ async function run() {
         const userCollection = client.db("brandShopDB").collection("users");
         const brandDataCollection = client.db("brandShopDB").collection("brandData");
 
+
+        //auth related api;
+        app.post('/jwt', logger, async (req, res) => {
+            try {
+                const user = req.body;
+                const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
+                res
+                    .cookie('token', token, {
+                        httpOnly: true,
+                        secure: false
+                    })
+                    .send(token);
+            } catch (error) {
+                return res.send({ error: true, message: error.message })
+            }
+
+        });
 
         //userList
 
@@ -72,23 +108,28 @@ async function run() {
         })
         //product update
         app.put('/products/:id', async (req, res) => {
-            const id = req.params.id
-            const updateProduct = req.body
-            const filter = { _id: new ObjectId(id) };
+            try {
+                const id = req.params.id
+                const updateProduct = req.body
+                const filter = { _id: new ObjectId(id) };
+                const options = { upsert: true };
+                const update = {
+                    $set: {
+                        image: updateProduct.image,
+                        productName: updateProduct.productName,
+                        brandName: updateProduct.brandName,
+                        productType: updateProduct.productType,
+                        price: updateProduct.price,
+                        rating: updateProduct.rating,
+                    },
+                };
+                const result = await productCollection.updateOne(filter, update, options);
+                res.send(result)
+            } catch (error) {
+                return res.send({ error: true, message: error.message })
+            }
 
-            const options = { upsert: true };
-            const update = {
-                $set: {
-                    image: updateProduct.image,
-                    productName: updateProduct.productName,
-                    brandName: updateProduct.brandName,
-                    productType: updateProduct.productType,
-                    price: updateProduct.price,
-                    rating: updateProduct.rating,
-                },
-            };
-            const result = await productCollection.updateOne(filter, update, options);
-            res.send(result)
+
         })
 
 
@@ -102,17 +143,24 @@ async function run() {
             res.send(result);
         })
 
-        //user cart
-        app.get('/user-cart', async (req, res) => {
-            const query = await addedCartCollection.find().toArray();
-            res.send(query);
+
+        app.get('/user-cart', logger, verifyToken, async (req, res) => {
+            try {
+                if (req.query?.email !== req.user?.email) {
+                    return res.status(403).send({ message: 'Forbidden access.' })
+                }
+                const email = req.query.email;
+                let query = {}
+                if (req.query?.email) {
+                    query = { userEmail: email }
+                }
+                const result = await addedCartCollection.find(query).toArray();
+                res.send(result);
+            } catch (error) {
+                return res.send({ error: true, message: error.message });
+            }
         })
-        app.get('/user-cart/:userId', async (req, res) => {
-            const userId = req.params.userId
-            const query = { userId };
-            const result = await addedCartCollection.find(query).toArray();
-            res.send(result)
-        });
+
 
         app.post('/user-cart', async (req, res) => {
             const cart = req.body;
@@ -146,7 +194,6 @@ async function run() {
         })
         app.post('/brand-data', async (req, res) => {
             const brandData = req.body;
-            console.log(brandData)
             const result = await brandDataCollection.insertOne(brandData)
             res.send(result);
         })
