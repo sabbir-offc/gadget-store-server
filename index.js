@@ -12,12 +12,11 @@ const port = process.env.PORT || 5001;
 //middleware
 app.use(express.json());
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://brand-shop-acfd4.web.app/'],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 }));
 app.use(coockieParser())
-
-
 
 
 
@@ -34,22 +33,7 @@ const client = new MongoClient(uri, {
 
 
 //middleware;
-const logger = async (req, res, next) => {
-    next();
-}
-const verifyToken = async (req, res, next) => {
-    const token = req.cookies?.token;
-    if (!token) {
-        return res.status(401).send({ message: 'unauthorized access.' })
-    }
-    jwt.verify(token, process.env.ACCESS_TOKEN, (error, decoded) => {
-        if (error) {
-            return res.status(401).send({ message: 'unauthorized access.' })
-        }
-        req.user = decoded
-        next();
-    });
-}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -60,23 +44,46 @@ async function run() {
         const userCollection = client.db("brandShopDB").collection("users");
         const brandDataCollection = client.db("brandShopDB").collection("brandData");
 
-
-        //auth related api;
-        app.post('/jwt', logger, async (req, res) => {
+        const verifyToken = (req, res, next) => {
             try {
-                const user = req.body;
-                const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '1h' })
-                res
-                    .cookie('token', token, {
-                        httpOnly: true,
-                        secure: false
-                    })
-                    .send(token);
-            } catch (error) {
-                return res.send({ error: true, message: error.message })
-            }
+                const { token } = req.cookies
+                if (!token) {
+                    return res.status(401).send({ message: 'Unauthorized' })
+                }
+                jwt.verify(token, process.env.ACCESS_TOKEN, (err, decode) => {
+                    if (err) {
+                        return res.status(401).send({ message: 'Unauthorized' })
 
-        });
+                    }
+                    req.user = decode;
+                    next()
+
+                })
+            } catch (error) {
+                console.log(error.message)
+            }
+        }
+
+
+
+
+        //auth related api
+        app.post('/api/v1/auth/access-token', async (req, res) => {
+            try {
+                const { email } = req.body;
+                console.log(email)
+                const token = await jwt.sign({
+                    email
+                }, process.env.ACCESS_TOKEN, { expiresIn: '1h' });
+
+                res.cookie('token', token, {
+                    httpOnly: true,
+                    secure: false
+                }).send({ success: true })
+            } catch (error) {
+                console.log(error.message)
+            }
+        })
 
         //userList
 
@@ -144,18 +151,20 @@ async function run() {
         })
 
 
-        app.get('/user-cart', logger, verifyToken, async (req, res) => {
+        app.get('/user-cart', verifyToken, async (req, res) => {
             try {
-                if (req.query?.email !== req.user?.email) {
-                    return res.status(403).send({ message: 'Forbidden access.' })
+
+                const userEmail = req.query?.email;
+                const verifyEmail = req.user?.email;
+                if (verifyEmail !== userEmail) {
+                    return res.status(403).send({ message: 'forbidden access' })
                 }
-                const email = req.query.email;
-                let query = {}
-                if (req.query?.email) {
-                    query = { userEmail: email }
+                let query = {};
+                if (userEmail) {
+                    query = { userEmail: userEmail }
                 }
                 const result = await addedCartCollection.find(query).toArray();
-                res.send(result);
+                res.send(result)
             } catch (error) {
                 return res.send({ error: true, message: error.message });
             }
