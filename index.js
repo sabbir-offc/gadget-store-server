@@ -41,7 +41,7 @@ async function run() {
         const productCollection = client.db("brandShopDB").collection("product");
         const adCollection = client.db("brandShopDB").collection("ad");
         const addedCartCollection = client.db("brandShopDB").collection("cart");
-        const userCollection = client.db("brandShopDB").collection("users");
+        const usersCollection = client.db("brandShopDB").collection("users");
         const brandDataCollection = client.db("brandShopDB").collection("brandData");
 
         const verifyToken = (req, res, next) => {
@@ -64,11 +64,21 @@ async function run() {
             }
         }
 
+        const verifyAdmin = async (req, res, next) => {
+            const user = req.user
+            const query = { email: user?.email }
+            const result = await usersCollection.findOne(query)
+            if (!result || result?.role !== 'admin') {
+                return res.status(401).send({ message: 'unauthorized access' });
+            }
+            next()
+        }
+
 
 
 
         //auth related api
-        app.post('/api/v1/auth/access-token', async (req, res) => {
+        app.post('/auth/access-token', async (req, res) => {
             try {
                 const { email } = req.body;
                 console.log(email)
@@ -86,23 +96,47 @@ async function run() {
         })
 
         //userList
-
         app.get('/users', async (req, res) => {
-            const query = await userCollection.find().toArray();
-            res.send(query);
+            const result = await usersCollection.find().toArray();
+            res.send(result);
         })
-        app.post('/users', async (req, res) => {
+        //save user data
+        app.post('/user', async (req, res) => {
             const user = req.body;
-            const result = await userCollection.insertOne(user);
+            console.log(user)
+            const query = { email: user?.email };
+            const isExists = await usersCollection.findOne(query);
+            console.log('isExists', isExists)
+            if (isExists) return res.send({ message: 'User Already Exists.', insertedId: null })
+            const result = await usersCollection.insertOne(user);
             res.send(result);
         })
 
-
-        app.get('/products', async (req, res) => {
-            const query = await productCollection.find().toArray();
-            res.send(query);
+        //get single user data
+        app.get('/user/:email', async (req, res) => {
+            const email = req.params.email;
+            let query = {}
+            if (email) {
+                query.email = email;
+            }
+            const result = await usersCollection.findOne(query);
+            res.send(result)
         })
-        app.post('/products', async (req, res) => {
+
+
+        app.get('/productsCount', async (req, res) => {
+            const result = await productCollection.estimatedDocumentCount();
+            res.send({ count: result });
+        })
+        app.get('/products', async (req, res) => {
+            const page = req.query.page;
+            const size = parseInt(req.query.size);
+
+            const result = await productCollection.find().skip(page * size).limit(size).toArray();
+
+            res.send(result);
+        })
+        app.post('/products', verifyToken, verifyAdmin, async (req, res) => {
             const product = req.body;
             const result = await productCollection.insertOne(product);
             res.send(result)
@@ -114,7 +148,7 @@ async function run() {
             res.send(result)
         })
         //product update
-        app.put('/products/:id', async (req, res) => {
+        app.put('/products/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id
                 const updateProduct = req.body
@@ -128,6 +162,7 @@ async function run() {
                         productType: updateProduct.productType,
                         price: updateProduct.price,
                         rating: updateProduct.rating,
+                        description: updateProduct.description
                     },
                 };
                 const result = await productCollection.updateOne(filter, update, options);
@@ -137,6 +172,14 @@ async function run() {
             }
 
 
+        })
+
+        //delete a product 
+        app.delete('/product/delete/:id', verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await productCollection.deleteOne(query);
+            res.send(result);
         })
 
 
@@ -153,7 +196,6 @@ async function run() {
 
         app.get('/user-cart', verifyToken, async (req, res) => {
             try {
-
                 const userEmail = req.query?.email;
                 const verifyEmail = req.user?.email;
                 if (verifyEmail !== userEmail) {
@@ -180,7 +222,7 @@ async function run() {
 
         //cart product delete
 
-        app.delete('/user-cart/:userId/:id', async (req, res) => {
+        app.delete('/user-cart/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await addedCartCollection.deleteOne(query);
